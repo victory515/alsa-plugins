@@ -17,7 +17,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
-
+#include <time.h>
 #include <alsa/asoundlib.h>
 #include <alsa/pcm_external.h>
 #include <arpa/inet.h>
@@ -34,6 +34,7 @@
 #include <stdint.h>
 #include <sys/ioctl.h>
 #include <sys/timerfd.h>
+//#include <linux/time.h>
 
 #ifdef AAF_DEBUG
 #define pr_debug(...) SNDERR(__VA_ARGS__)
@@ -41,17 +42,18 @@
 #define pr_debug(...) (void)0
 #endif
 
-#define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 #define NSEC_PER_USEC 1000
-#define NSEC_PER_SEC  1000000000
-#define TAI_OFFSET    (37ULL * NSEC_PER_SEC)
+#define NSEC_PER_SEC 1000000000
+#define TAI_OFFSET (37ULL * NSEC_PER_SEC)
 #define TAI_TO_UTC(t) (t - TAI_OFFSET)
 
 #define FD_COUNT_PLAYBACK 1
-#define FD_COUNT_CAPTURE  2
+#define FD_COUNT_CAPTURE 2
 
-typedef struct {
+typedef struct
+{
 	snd_pcm_ioplug_t io;
 
 	char ifname[IFNAMSIZ];
@@ -93,7 +95,8 @@ typedef struct {
 
 static unsigned int alsa_to_avtp_format(snd_pcm_format_t format)
 {
-	switch (format) {
+	switch (format)
+	{
 	case SND_PCM_FORMAT_S16_BE:
 		return AVTP_AAF_FORMAT_INT_16BIT;
 	case SND_PCM_FORMAT_S24_3BE:
@@ -109,7 +112,8 @@ static unsigned int alsa_to_avtp_format(snd_pcm_format_t format)
 
 static unsigned int alsa_to_avtp_rate(unsigned int rate)
 {
-	switch (rate) {
+	switch (rate)
+	{
 	case 8000:
 		return AVTP_AAF_PCM_NSR_8KHZ;
 	case 16000:
@@ -139,7 +143,8 @@ static int aaf_load_config(snd_pcm_aaf_t *aaf, snd_config_t *conf)
 {
 	snd_config_iterator_t cur, next;
 
-	snd_config_for_each(cur, next, conf) {
+	snd_config_for_each(cur, next, conf)
+	{
 		snd_config_t *entry = snd_config_iterator_entry(cur);
 		const char *id;
 
@@ -147,19 +152,22 @@ static int aaf_load_config(snd_pcm_aaf_t *aaf, snd_config_t *conf)
 			goto err;
 
 		if (strcmp(id, "comment") == 0 ||
-		    strcmp(id, "type") == 0 ||
-		    strcmp(id, "hint") == 0)
+			strcmp(id, "type") == 0 ||
+			strcmp(id, "hint") == 0)
 			continue;
 
-		if (strcmp(id, "ifname") == 0) {
+		if (strcmp(id, "ifname") == 0)
+		{
 			const char *ifname;
 
 			if (snd_config_get_string(entry, &ifname) < 0)
 				goto err;
 
 			snprintf(aaf->ifname, sizeof(aaf->ifname), "%s",
-				 ifname);
-		} else if (strcmp(id, "addr") == 0) {
+					 ifname);
+		}
+		else if (strcmp(id, "addr") == 0)
+		{
 			const char *addr;
 			int n;
 
@@ -167,12 +175,14 @@ static int aaf_load_config(snd_pcm_aaf_t *aaf, snd_config_t *conf)
 				goto err;
 
 			n = sscanf(addr, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-				   &aaf->addr[0], &aaf->addr[1],
-				   &aaf->addr[2], &aaf->addr[3],
-				   &aaf->addr[4], &aaf->addr[5]);
+					   &aaf->addr[0], &aaf->addr[1],
+					   &aaf->addr[2], &aaf->addr[3],
+					   &aaf->addr[4], &aaf->addr[5]);
 			if (n != 6)
 				goto err;
-		} else if (strcmp(id, "prio") == 0) {
+		}
+		else if (strcmp(id, "prio") == 0)
+		{
 			long prio;
 
 			if (snd_config_get_integer(entry, &prio) < 0)
@@ -182,7 +192,9 @@ static int aaf_load_config(snd_pcm_aaf_t *aaf, snd_config_t *conf)
 				goto err;
 
 			aaf->prio = prio;
-		} else if (strcmp(id, "streamid") == 0) {
+		}
+		else if (strcmp(id, "streamid") == 0)
+		{
 			const char *streamid;
 			unsigned char addr[6];
 			unsigned short unique_id;
@@ -192,20 +204,22 @@ static int aaf_load_config(snd_pcm_aaf_t *aaf, snd_config_t *conf)
 				goto err;
 
 			n = sscanf(streamid,
-				   "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hx",
-				   &addr[0], &addr[1], &addr[2], &addr[3],
-				   &addr[4], &addr[5], &unique_id);
+					   "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hx",
+					   &addr[0], &addr[1], &addr[2], &addr[3],
+					   &addr[4], &addr[5], &unique_id);
 			if (n != 7)
 				goto err;
 
-			aaf->streamid = (uint64_t) addr[0] << 56 |
-					(uint64_t) addr[1] << 48 |
-					(uint64_t) addr[2] << 40 |
-					(uint64_t) addr[3] << 32 |
-					(uint64_t) addr[4] << 24 |
-					(uint64_t) addr[5] << 16 |
-					unique_id;
-		} else if (strcmp(id, "mtt") == 0) {
+			aaf->streamid = (uint64_t)addr[0] << 56 |
+							(uint64_t)addr[1] << 48 |
+							(uint64_t)addr[2] << 40 |
+							(uint64_t)addr[3] << 32 |
+							(uint64_t)addr[4] << 24 |
+							(uint64_t)addr[5] << 16 |
+							unique_id;
+		}
+		else if (strcmp(id, "mtt") == 0)
+		{
 			long mtt;
 
 			if (snd_config_get_integer(entry, &mtt) < 0)
@@ -215,7 +229,9 @@ static int aaf_load_config(snd_pcm_aaf_t *aaf, snd_config_t *conf)
 				goto err;
 
 			aaf->mtt = mtt * NSEC_PER_USEC;
-		} else if (strcmp(id, "time_uncertainty") == 0) {
+		}
+		else if (strcmp(id, "time_uncertainty") == 0)
+		{
 			long t_uncertainty;
 
 			if (snd_config_get_integer(entry, &t_uncertainty) < 0)
@@ -225,7 +241,9 @@ static int aaf_load_config(snd_pcm_aaf_t *aaf, snd_config_t *conf)
 				goto err;
 
 			aaf->t_uncertainty = t_uncertainty * NSEC_PER_USEC;
-		} else if (strcmp(id, "frames_per_pdu") == 0) {
+		}
+		else if (strcmp(id, "frames_per_pdu") == 0)
+		{
 			long frames_per_pdu;
 
 			if (snd_config_get_integer(entry, &frames_per_pdu) < 0)
@@ -235,18 +253,22 @@ static int aaf_load_config(snd_pcm_aaf_t *aaf, snd_config_t *conf)
 				goto err;
 
 			aaf->frames_per_pdu = frames_per_pdu;
-		} else if (strcmp(id, "ptime_tolerance") == 0) {
+		}
+		else if (strcmp(id, "ptime_tolerance") == 0)
+		{
 			long ptime_tolerance;
 
 			if (snd_config_get_integer(entry,
-						   &ptime_tolerance) < 0)
+									   &ptime_tolerance) < 0)
 				goto err;
 
 			if (ptime_tolerance < 0)
 				goto err;
 
 			aaf->ptime_tolerance = ptime_tolerance * NSEC_PER_USEC;
-		} else {
+		}
+		else
+		{
 			SNDERR("Invalid configuration: %s", id);
 			goto err;
 		}
@@ -265,15 +287,17 @@ static int aaf_init_socket(snd_pcm_aaf_t *aaf)
 	struct ifreq req;
 	snd_pcm_ioplug_t *io = &aaf->io;
 
-	fd = socket(AF_PACKET, SOCK_DGRAM|SOCK_NONBLOCK, htons(ETH_P_TSN));
-	if (fd < 0) {
+	fd = socket(AF_PACKET, SOCK_DGRAM | SOCK_NONBLOCK, htons(ETH_P_TSN));
+	if (fd < 0)
+	{
 		SNDERR("Failed to open AF_PACKET socket");
 		return -errno;
 	}
 
 	snprintf(req.ifr_name, sizeof(req.ifr_name), "%s", aaf->ifname);
 	res = ioctl(fd, SIOCGIFINDEX, &req);
-	if (res < 0) {
+	if (res < 0)
+	{
 		SNDERR("Failed to get network interface index");
 		res = -errno;
 		goto err;
@@ -285,12 +309,14 @@ static int aaf_init_socket(snd_pcm_aaf_t *aaf)
 	aaf->sk_addr.sll_ifindex = req.ifr_ifindex;
 	memcpy(&aaf->sk_addr.sll_addr, aaf->addr, ETH_ALEN);
 
-	if (io->stream == SND_PCM_STREAM_PLAYBACK) {
+	if (io->stream == SND_PCM_STREAM_PLAYBACK)
+	{
 		struct sock_txtime txtime_cfg;
 
 		res = setsockopt(fd, SOL_SOCKET, SO_PRIORITY, &aaf->prio,
-				 sizeof(aaf->prio));
-		if (res < 0) {
+						 sizeof(aaf->prio));
+		if (res < 0)
+		{
 			SNDERR("Failed to set socket priority");
 			res = -errno;
 			goto err;
@@ -299,18 +325,22 @@ static int aaf_init_socket(snd_pcm_aaf_t *aaf)
 		txtime_cfg.clockid = CLOCK_TAI;
 		txtime_cfg.flags = 0;
 		res = setsockopt(fd, SOL_SOCKET, SO_TXTIME, &txtime_cfg,
-				sizeof(txtime_cfg));
-		if (res < 0) {
+						 sizeof(txtime_cfg));
+		if (res < 0)
+		{
 			SNDERR("Failed to configure txtime");
 			res = -errno;
 			goto err;
 		}
-	} else {
-		struct packet_mreq mreq = { 0 };
+	}
+	else
+	{
+		struct packet_mreq mreq = {0};
 
-		res = bind(fd, (struct sockaddr *) &aaf->sk_addr,
-			   sizeof(aaf->sk_addr));
-		if (res < 0) {
+		res = bind(fd, (struct sockaddr *)&aaf->sk_addr,
+				   sizeof(aaf->sk_addr));
+		if (res < 0)
+		{
 			SNDERR("Failed to bind socket");
 			res = -errno;
 			goto err;
@@ -321,8 +351,9 @@ static int aaf_init_socket(snd_pcm_aaf_t *aaf)
 		mreq.mr_alen = ETH_ALEN;
 		memcpy(&mreq.mr_address, aaf->addr, ETH_ALEN);
 		res = setsockopt(fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP,
-				 &mreq, sizeof(struct packet_mreq));
-		if (res < 0) {
+						 &mreq, sizeof(struct packet_mreq));
+		if (res < 0)
+		{
 			SNDERR("Failed to add multicast address");
 			res = -errno;
 			goto err;
@@ -366,7 +397,8 @@ static int aaf_init_pdu(snd_pcm_aaf_t *aaf)
 	if (!pdu)
 		return -ENOMEM;
 
-	if (io->stream == SND_PCM_STREAM_PLAYBACK) {
+	if (io->stream == SND_PCM_STREAM_PLAYBACK)
+	{
 		res = avtp_aaf_pdu_init(pdu);
 		if (res < 0)
 			goto err;
@@ -376,37 +408,37 @@ static int aaf_init_pdu(snd_pcm_aaf_t *aaf)
 			goto err;
 
 		res = avtp_aaf_pdu_set(pdu, AVTP_AAF_FIELD_STREAM_ID,
-				       aaf->streamid);
+							   aaf->streamid);
 		if (res < 0)
 			goto err;
 
 		res = avtp_aaf_pdu_set(pdu, AVTP_AAF_FIELD_FORMAT,
-				       alsa_to_avtp_format(io->format));
+							   alsa_to_avtp_format(io->format));
 		if (res < 0)
 			goto err;
 
 		res = avtp_aaf_pdu_set(pdu, AVTP_AAF_FIELD_NSR,
-				       alsa_to_avtp_rate(io->rate));
+							   alsa_to_avtp_rate(io->rate));
 		if (res < 0)
 			goto err;
 
 		res = avtp_aaf_pdu_set(pdu, AVTP_AAF_FIELD_CHAN_PER_FRAME,
-				       io->channels);
+							   io->channels);
 		if (res < 0)
 			goto err;
 
 		res = avtp_aaf_pdu_set(pdu, AVTP_AAF_FIELD_BIT_DEPTH,
-				       snd_pcm_format_width(io->format));
+							   snd_pcm_format_width(io->format));
 		if (res < 0)
 			goto err;
 
 		res = avtp_aaf_pdu_set(pdu, AVTP_AAF_FIELD_STREAM_DATA_LEN,
-				       payload_size);
+							   payload_size);
 		if (res < 0)
 			goto err;
 
 		res = avtp_aaf_pdu_set(pdu, AVTP_AAF_FIELD_SP,
-				       AVTP_AAF_PCM_SP_NORMAL);
+							   AVTP_AAF_PCM_SP_NORMAL);
 		if (res < 0)
 			goto err;
 	}
@@ -421,7 +453,7 @@ err:
 }
 
 static int aaf_init_areas(snd_pcm_aaf_t *aaf, snd_pcm_channel_area_t *areas,
-			  void *buf)
+						  void *buf)
 {
 	ssize_t sample_size, frame_size;
 	snd_pcm_ioplug_t *io = &aaf->io;
@@ -432,7 +464,8 @@ static int aaf_init_areas(snd_pcm_aaf_t *aaf, snd_pcm_channel_area_t *areas,
 
 	frame_size = sample_size * io->channels;
 
-	for (unsigned int i = 0; i < io->channels; i++) {
+	for (unsigned int i = 0; i < io->channels; i++)
+	{
 		areas[i].addr = buf;
 		areas[i].first = i * sample_size * 8;
 		areas[i].step = frame_size * 8;
@@ -473,7 +506,8 @@ static int aaf_init_msghdr(snd_pcm_aaf_t *aaf)
 	struct cmsghdr *cmsg;
 
 	iov = malloc(sizeof(struct iovec));
-	if (!iov) {
+	if (!iov)
+	{
 		SNDERR("Failed to allocate iovec");
 		return -ENOMEM;
 	}
@@ -483,14 +517,16 @@ static int aaf_init_msghdr(snd_pcm_aaf_t *aaf)
 
 	controllen = CMSG_SPACE(sizeof(__u64));
 	control = malloc(controllen);
-	if (!control) {
+	if (!control)
+	{
 		SNDERR("Failed to allocate control buffer");
 		res = -ENOMEM;
 		goto err_free_iov;
 	}
 
 	msg = malloc(sizeof(struct msghdr));
-	if (!msg) {
+	if (!msg)
+	{
 		SNDERR("Failed to allocate msghdr");
 		res = -ENOMEM;
 		goto err_free_control;
@@ -520,7 +556,7 @@ err_free_iov:
 }
 
 static void aaf_inc_ptr(snd_pcm_uframes_t *ptr, snd_pcm_uframes_t val,
-			snd_pcm_uframes_t boundary)
+						snd_pcm_uframes_t boundary)
 {
 	*ptr += val;
 
@@ -558,13 +594,23 @@ static int aaf_mclk_start_playback(snd_pcm_aaf_t *aaf)
 	snd_pcm_ioplug_t *io = &aaf->io;
 
 	res = clock_gettime(CLOCK_TAI, &now);
-	if (res < 0) {
+	if (res < 0)
+	{
 		SNDERR("Failed to get time from clock");
 		return -errno;
 	}
 
 	period = (uint64_t)NSEC_PER_SEC * io->period_size / io->rate;
-	time = now.tv_sec * NSEC_PER_SEC + now.tv_nsec + period;
+	//qzz修改
+	time = (now.tv_sec+37) * NSEC_PER_SEC + now.tv_nsec + period;
+	//time = (now.tv_sec) * NSEC_PER_SEC + now.tv_nsec + period;
+	//printf("%ld %ld\n",now.tv_sec,time);
+
+	//qzz修改结束
+
+	//原代码
+	//time = now.tv_sec * NSEC_PER_SEC + now.tv_nsec + period;
+
 	res = aaf_mclk_start(aaf, time, period);
 	if (res < 0)
 		return res;
@@ -580,7 +626,8 @@ static int aaf_mclk_start_capture(snd_pcm_aaf_t *aaf, uint32_t avtp_time)
 	snd_pcm_ioplug_t *io = &aaf->io;
 
 	res = clock_gettime(CLOCK_TAI, &tspec);
-	if (res < 0) {
+	if (res < 0)
+	{
 		SNDERR("Failed to get time from clock");
 		return -errno;
 	}
@@ -613,10 +660,11 @@ static int aaf_mclk_start_capture(snd_pcm_aaf_t *aaf, uint32_t avtp_time)
 static int aaf_mclk_reset(snd_pcm_aaf_t *aaf)
 {
 	int res;
-	struct itimerspec itspec = { 0 };
+	struct itimerspec itspec = {0};
 
 	res = timerfd_settime(aaf->timer_fd, 0, &itspec, NULL);
-	if (res < 0) {
+	if (res < 0)
+	{
 		SNDERR("Failed to stop media clock");
 		return res;
 	}
@@ -633,11 +681,11 @@ static uint64_t aaf_mclk_gettime(snd_pcm_aaf_t *aaf)
 		return 0;
 
 	return aaf->timer_starttime + aaf->timer_period *
-	       (aaf->timer_expirations - 1);
+									  (aaf->timer_expirations - 1);
 }
 
 static int aaf_tx_pdu(snd_pcm_aaf_t *aaf, snd_pcm_uframes_t ptr,
-		      uint64_t ptime, __u64 txtime)
+					  uint64_t ptime, __u64 txtime)
 {
 	int res;
 	ssize_t n;
@@ -646,13 +694,48 @@ static int aaf_tx_pdu(snd_pcm_aaf_t *aaf, snd_pcm_uframes_t ptr,
 
 	*(__u64 *)CMSG_DATA(aaf->cmsg) = txtime;
 
+
+	//qzz修改
+    //清空buffer
+	// res = snd_pcm_areas_copy_wrap(aaf->payload_areas, 0,
+	// 							  aaf->frames_per_pdu,
+	// 							  aaf->audiobuf_areas,
+	// 							  (ptr % io->buffer_size),
+	// 							  io->buffer_size, io->channels,
+	// 							  aaf->frames_per_pdu, io->format);
+	// if (res < 0)
+	// {
+	// 	SNDERR("Failed to copy data to AVTP payload");
+	// 	return res;
+	// }
+
+	// uint8_t* frames = aaf->payload_areas->addr;
+    // memset(frames,0x12,48);
+    // //获取时间戳
+    // struct timespec  send_stamp;
+    // clock_gettime(CLOCK_REALTIME, &send_stamp);
+    // long tv_sec = htonl(send_stamp.tv_sec);
+    // long tv_nsec = htonl(send_stamp.tv_nsec);
+
+    // memcpy(frames,&tv_sec,sizeof(uint32_t));
+    // memcpy(frames+sizeof(uint32_t),&tv_nsec,sizeof(uint32_t));
+    // //打印时间戳
+    // //printf("************************\n");
+    // printf("%ld.%09ld\n",(long)send_stamp.tv_sec,(long)send_stamp.tv_nsec);
+	// //qzz修改结束
+
+
+
+	//qzz修改结束
+	//原本代码
 	res = snd_pcm_areas_copy_wrap(aaf->payload_areas, 0,
-				      aaf->frames_per_pdu,
-				      aaf->audiobuf_areas,
-				      (ptr % io->buffer_size),
-				      io->buffer_size, io->channels,
-				      aaf->frames_per_pdu, io->format);
-	if (res < 0) {
+								  aaf->frames_per_pdu,
+								  aaf->audiobuf_areas,
+								  (ptr % io->buffer_size),
+								  io->buffer_size, io->channels,
+								  aaf->frames_per_pdu, io->format);
+	if (res < 0)
+	{
 		SNDERR("Failed to copy data to AVTP payload");
 		return res;
 	}
@@ -666,8 +749,12 @@ static int aaf_tx_pdu(snd_pcm_aaf_t *aaf, snd_pcm_uframes_t ptr,
 		return res;
 
 	n = sendmsg(aaf->sk_fd, aaf->msg, 0);
-	if (n < 0 || n != aaf->pdu_size) {
-		SNDERR("Failed to send AAF PDU");
+	//qzz修改
+	//fprintf(stderr,"pdu_size:%d n:%ld\n",aaf->pdu_size,n);
+	
+	if (n < 0 || n != aaf->pdu_size)
+	{
+		SNDERR("------Failed to send AAF PDU--------yyy");
 		return -EIO;
 	}
 
@@ -684,7 +771,8 @@ static int aaf_tx_pdus(snd_pcm_aaf_t *aaf, int pdu_count)
 	ptime = txtime + aaf->mtt;
 	ptr = aaf->hw_ptr;
 
-	while (pdu_count--) {
+	while (pdu_count--)
+	{
 		res = aaf_tx_pdu(aaf, ptr, ptime, txtime);
 		if (res < 0)
 			return res;
@@ -704,12 +792,14 @@ static bool is_ptime_valid(snd_pcm_aaf_t *aaf, uint32_t avtp_time)
 	const uint64_t upper_bound = exp_ptime + aaf->ptime_tolerance;
 	const uint64_t ptime = (exp_ptime & 0xFFFFFFFF00000000ULL) | avtp_time;
 
-	if (ptime < lower_bound || ptime > upper_bound) {
+	if (ptime < lower_bound || ptime > upper_bound)
+	{
 		pr_debug("Presentation time not expected");
 		return false;
 	}
 
-	if (ptime < aaf_mclk_gettime(aaf)) {
+	if (ptime < aaf_mclk_gettime(aaf))
+	{
 		pr_debug("Presentation time in the past");
 		return false;
 	}
@@ -729,12 +819,13 @@ static bool is_pdu_valid(snd_pcm_aaf_t *aaf)
 	const uint64_t format = alsa_to_avtp_format(io->format);
 	const uint64_t nsr = alsa_to_avtp_rate(io->rate);
 	const uint64_t depth = snd_pcm_format_width(io->format);
-	struct avtp_common_pdu *common = (struct avtp_common_pdu *) aaf->pdu;
+	struct avtp_common_pdu *common = (struct avtp_common_pdu *)aaf->pdu;
 
 	res = avtp_pdu_get(common, AVTP_FIELD_VERSION, &val32);
 	if (res < 0)
 		return false;
-	if (val32 != 0) {
+	if (val32 != 0)
+	{
 		pr_debug("Version mismatch: expected %u, got %u", 0, val32);
 		return false;
 	}
@@ -742,16 +833,18 @@ static bool is_pdu_valid(snd_pcm_aaf_t *aaf)
 	res = avtp_aaf_pdu_get(aaf->pdu, AVTP_AAF_FIELD_STREAM_ID, &val64);
 	if (res < 0)
 		return false;
-	if (val64 != aaf->streamid) {
+	if (val64 != aaf->streamid)
+	{
 		pr_debug("Streamid mismatch: expected %lu, got %lu",
-			 aaf->streamid,	val64);
+				 aaf->streamid, val64);
 		return false;
 	}
 
 	res = avtp_aaf_pdu_get(aaf->pdu, AVTP_AAF_FIELD_TV, &val64);
 	if (res < 0)
 		return false;
-	if (val64 != 1) {
+	if (val64 != 1)
+	{
 		pr_debug("TV mismatch: expected %u, got %lu", 1, val64);
 		return false;
 	}
@@ -759,25 +852,28 @@ static bool is_pdu_valid(snd_pcm_aaf_t *aaf)
 	res = avtp_aaf_pdu_get(aaf->pdu, AVTP_AAF_FIELD_SP, &val64);
 	if (res < 0)
 		return false;
-	if (val64 != AVTP_AAF_PCM_SP_NORMAL) {
+	if (val64 != AVTP_AAF_PCM_SP_NORMAL)
+	{
 		pr_debug("SP mismatch: expected %u, got %lu",
-			 AVTP_AAF_PCM_SP_NORMAL, val64);
+				 AVTP_AAF_PCM_SP_NORMAL, val64);
 		return false;
 	}
 
 	res = avtp_aaf_pdu_get(aaf->pdu, AVTP_AAF_FIELD_FORMAT, &val64);
 	if (res < 0)
 		return false;
-	if (val64 != format) {
+	if (val64 != format)
+	{
 		pr_debug("Format mismatch: expected %u, got %lu", format,
-			 val64);
+				 val64);
 		return false;
 	}
 
 	res = avtp_aaf_pdu_get(aaf->pdu, AVTP_AAF_FIELD_NSR, &val64);
 	if (res < 0)
 		return false;
-	if (val64 != nsr) {
+	if (val64 != nsr)
+	{
 		pr_debug("NSR mismatch: expected %u, got %lu", nsr, val64);
 		return false;
 	}
@@ -785,41 +881,46 @@ static bool is_pdu_valid(snd_pcm_aaf_t *aaf)
 	res = avtp_aaf_pdu_get(aaf->pdu, AVTP_AAF_FIELD_CHAN_PER_FRAME, &val64);
 	if (res < 0)
 		return false;
-	if (val64 != io->channels) {
+	if (val64 != io->channels)
+	{
 		pr_debug("Channels mismatch: expected %u, got %lu",
-			 io->channels, val64);
+				 io->channels, val64);
 		return false;
 	}
 
 	res = avtp_aaf_pdu_get(aaf->pdu, AVTP_AAF_FIELD_BIT_DEPTH, &val64);
 	if (res < 0)
 		return false;
-	if (val64 != depth) {
+	if (val64 != depth)
+	{
 		pr_debug("Bit depth mismatch: expected %u, got %lu", depth,
-			 val64);
+				 val64);
 		return false;
 	}
 
 	res = avtp_aaf_pdu_get(aaf->pdu, AVTP_AAF_FIELD_STREAM_DATA_LEN, &val64);
 	if (res < 0)
 		return false;
-	if (val64 != data_len) {
+	if (val64 != data_len)
+	{
 		pr_debug("Data len mismatch: expected %u, got %lu",
-			 data_len, val64);
+				 data_len, val64);
 		return false;
 	}
 
 	res = avtp_aaf_pdu_get(aaf->pdu, AVTP_AAF_FIELD_SEQ_NUM, &val64);
 	if (res < 0)
 		return false;
-	if (val64 != aaf->pdu_seq) {
+	if (val64 != aaf->pdu_seq)
+	{
 		pr_debug("Sequence mismatch: expected %u, got %lu",
-			 aaf->pdu_seq, val64);
+				 aaf->pdu_seq, val64);
 		aaf->pdu_seq = val64;
 	}
 	aaf->pdu_seq++;
 
-	if (aaf->timer_starttime) {
+	if (aaf->timer_starttime)
+	{
 		/* If media clock has started, it means we have already
 		 * received an AVTPDU, so we are able to check if the
 		 * Presentation Time from this AVTPDU is valid.
@@ -827,11 +928,12 @@ static bool is_pdu_valid(snd_pcm_aaf_t *aaf)
 		uint64_t avtp_time;
 
 		res = avtp_aaf_pdu_get(aaf->pdu, AVTP_AAF_FIELD_TIMESTAMP,
-				       &avtp_time);
+							   &avtp_time);
 		if (res < 0)
 			return false;
 
-		if (!is_ptime_valid(aaf, avtp_time)) {
+		if (!is_ptime_valid(aaf, avtp_time))
+		{
 			pr_debug("Packet dropped: PT not valid");
 			return false;
 		}
@@ -847,7 +949,8 @@ static int aaf_copy_pdu_payload(snd_pcm_aaf_t *aaf)
 	snd_pcm_ioplug_t *io = &aaf->io;
 
 	hw_avail = snd_pcm_ioplug_hw_avail(io, aaf->hw_virt_ptr, io->appl_ptr);
-	if (hw_avail < aaf->frames_per_pdu) {
+	if (hw_avail < aaf->frames_per_pdu)
+	{
 		/* If there isn't enough space available on buffer to copy the
 		 * samples from AVTPDU, it means we've reached an overrun
 		 * state.
@@ -856,11 +959,12 @@ static int aaf_copy_pdu_payload(snd_pcm_aaf_t *aaf)
 	}
 
 	res = snd_pcm_areas_copy_wrap(aaf->audiobuf_areas,
-				      (aaf->hw_virt_ptr % io->buffer_size),
-				      io->buffer_size, aaf->payload_areas,
-				      0, aaf->frames_per_pdu, io->channels,
-				      aaf->frames_per_pdu, io->format);
-	if (res < 0) {
+								  (aaf->hw_virt_ptr % io->buffer_size),
+								  io->buffer_size, aaf->payload_areas,
+								  0, aaf->frames_per_pdu, io->channels,
+								  aaf->frames_per_pdu, io->format);
+	if (res < 0)
+	{
 		SNDERR("Failed to copy data from AVTP payload");
 		return res;
 	}
@@ -873,7 +977,8 @@ static int aaf_dispatch_pdu_aaf(snd_pcm_aaf_t *aaf)
 {
 	int res;
 
-	if (!is_pdu_valid(aaf)) {
+	if (!is_pdu_valid(aaf))
+	{
 		pr_debug("AAF PDU dropped: Bad field(s)");
 		return 0;
 	}
@@ -882,7 +987,8 @@ static int aaf_dispatch_pdu_aaf(snd_pcm_aaf_t *aaf)
 	if (res < 0)
 		return res;
 
-	if (aaf->timer_starttime == 0) {
+	if (aaf->timer_starttime == 0)
+	{
 		/* If the media clock has not been started yet (which means
 		 * this is the first AAF PDU received by the plugin), we start
 		 * it.
@@ -890,7 +996,7 @@ static int aaf_dispatch_pdu_aaf(snd_pcm_aaf_t *aaf)
 		uint64_t avtp_time;
 
 		res = avtp_aaf_pdu_get(aaf->pdu, AVTP_AAF_FIELD_TIMESTAMP,
-				       &avtp_time);
+							   &avtp_time);
 		if (res < 0)
 			return res;
 
@@ -906,13 +1012,14 @@ static int aaf_dispatch_pdu(snd_pcm_aaf_t *aaf)
 {
 	int res;
 	uint32_t subtype;
-	struct avtp_common_pdu *common = (struct avtp_common_pdu *) aaf->pdu;
+	struct avtp_common_pdu *common = (struct avtp_common_pdu *)aaf->pdu;
 
 	res = avtp_pdu_get(common, AVTP_FIELD_SUBTYPE, &subtype);
 	if (res < 0)
 		return res;
 
-	switch (subtype) {
+	switch (subtype)
+	{
 	case AVTP_SUBTYPE_AAF:
 		return aaf_dispatch_pdu_aaf(aaf);
 	default:
@@ -927,16 +1034,48 @@ static int aaf_socket_new_data(snd_pcm_aaf_t *aaf)
 	snd_pcm_ioplug_t *io = &aaf->io;
 
 	n = recv(aaf->sk_fd, aaf->pdu, aaf->pdu_size, 0);
-	if (n < 0) {
+
+	//yyy 接收方获取时间戳计算时延
+	long recv_tv_sec =0,recv_tv_nsec = 0;
+	float  delay=0;
+	struct timespec current_stamp;
+	memcpy(&recv_tv_sec,aaf->pdu->avtp_payload,sizeof(uint32_t));
+	memcpy(&recv_tv_nsec,aaf->pdu->avtp_payload+sizeof(uint32_t),sizeof(uint32_t));
+	recv_tv_sec = ntohl(recv_tv_sec);
+	recv_tv_nsec = ntohl(recv_tv_nsec);
+	
+	clock_gettime(CLOCK_REALTIME, &current_stamp);
+	delay = (current_stamp.tv_sec-recv_tv_sec)*1000000000+(current_stamp.tv_nsec-recv_tv_nsec);
+
+
+
+	//SNDERR("打印接收数据包");
+	static long packet_id = 0;
+	//fprintf(stderr,"------------------%ld个帧------------------\n",packet_id++);
+	fprintf(stderr,"Packet_num:%ld ",packet_id++);
+	fprintf(stderr,"Send_time:%ld.%09ld  ",recv_tv_sec,recv_tv_nsec);
+	fprintf(stderr,"Recv_time:%ld.%09ld  ",(long)current_stamp.tv_sec,(long)current_stamp.tv_nsec);
+	fprintf(stderr,"Delay:%.6f ms\n",delay/1000000);
+	for(int i = 0; i < aaf->pdu_size;i++){
+		fprintf(stderr,"%02x ",aaf->pdu->avtp_payload[i]);
+		if(i%16==15)fprintf(stderr,"\n");
+	}
+	fprintf(stderr,"\n\n");
+
+
+	if (n < 0)
+	{
 		SNDERR("Failed to receive data");
 		return -errno;
 	}
-	if (n != aaf->pdu_size) {
+	if (n != aaf->pdu_size)
+	{
 		pr_debug("AVTPDU dropped: Invalid size");
 		return 0;
 	}
 
-	if (io->state == SND_PCM_STATE_DRAINING) {
+	if (io->state == SND_PCM_STATE_DRAINING)
+	{
 		/* If device is in DRAIN state, there is no point in
 		 * dispatching the AVTPDU just received so we are done
 		 * here.
@@ -956,11 +1095,13 @@ static int aaf_flush_rx_buf(snd_pcm_aaf_t *aaf)
 	if (!tmp)
 		return -ENOMEM;
 
-	do {
+	do
+	{
 		n = recv(aaf->sk_fd, tmp, aaf->pdu_size, 0);
 	} while (n != -1);
 
-	if (errno != EAGAIN && errno != EWOULDBLOCK) {
+	if (errno != EAGAIN && errno != EWOULDBLOCK)
+	{
 		/* Something unexpected has happened while flushing the socket
 		 * rx buffer so we return error.
 		 */
@@ -980,7 +1121,8 @@ static int aaf_tx_frames(snd_pcm_aaf_t *aaf)
 	snd_pcm_ioplug_t *io = &aaf->io;
 
 	hw_avail = snd_pcm_ioplug_hw_avail(io, aaf->hw_ptr, io->appl_ptr);
-	if (hw_avail < io->period_size) {
+	if (hw_avail < io->period_size)
+	{
 		/* If the number of available frames is less than the period
 		 * size, we reached an underrun state.
 		 */
@@ -1005,7 +1147,8 @@ static int aaf_present_frames(snd_pcm_aaf_t *aaf)
 	if (len < 0)
 		len += aaf->boundary;
 
-	if ((snd_pcm_uframes_t) len > io->buffer_size) {
+	if ((snd_pcm_uframes_t)len > io->buffer_size)
+	{
 		/* If the distance between hw virtual pointer and hw
 		 * pointer is greater than the buffer size, it means we
 		 * had an overrun error so -EPIPE is returned.
@@ -1021,9 +1164,7 @@ static int aaf_process_frames(snd_pcm_aaf_t *aaf)
 {
 	snd_pcm_ioplug_t *io = &aaf->io;
 
-	return (io->stream == SND_PCM_STREAM_PLAYBACK) ?
-	       aaf_tx_frames(aaf) :
-	       aaf_present_frames(aaf);
+	return (io->stream == SND_PCM_STREAM_PLAYBACK) ? aaf_tx_frames(aaf) : aaf_present_frames(aaf);
 }
 
 static int aaf_timer_timeout(snd_pcm_aaf_t *aaf)
@@ -1033,7 +1174,8 @@ static int aaf_timer_timeout(snd_pcm_aaf_t *aaf)
 	uint64_t expirations;
 
 	n = read(aaf->timer_fd, &expirations, sizeof(uint64_t));
-	if (n < 0) {
+	if (n < 0)
+	{
 		SNDERR("Failed to read() timer");
 		return -errno;
 	}
@@ -1041,7 +1183,35 @@ static int aaf_timer_timeout(snd_pcm_aaf_t *aaf)
 	if (expirations != 1)
 		pr_debug("Missed %llu expirations ", expirations - 1);
 
-	while (expirations--) {
+	//qzz修改
+	// struct timespec  send_stamp;
+    // // gettimeofday(&send_stamp, NULL);
+    // clock_gettime(CLOCK_TAI, &send_stamp);
+	// SNDERR("expirations=%d %ld.%09ld",expirations,(long)send_stamp.tv_sec,(long)send_stamp.tv_nsec);
+	//qzz修改结束
+
+    // //qzz修改 
+    // //清空buffer
+    
+    // memset(aaf->pdu->avtp_payload,0x12,72);
+    // //获取时间戳
+    // struct timespec  send_stamp;
+    // clock_gettime(CLOCK_TAI, &send_stamp);
+    // long tv_sec = htonl(send_stamp.tv_sec);
+    // long tv_nsec = htonl(send_stamp.tv_nsec);
+
+    // memcpy(aaf->pdu->avtp_payload,&tv_sec,sizeof(uint32_t));
+    // memcpy(aaf->pdu->avtp_payload+sizeof(uint32_t),&tv_nsec,sizeof(uint32_t));
+    // //打印时间戳
+    // //printf("************************\n");
+    // printf("%ld.%09ld\n",(long)send_stamp.tv_sec,(long)send_stamp.tv_nsec);
+	// //qzz修改结束
+
+	//usleep(25000);
+	//sleep(1);
+	//printf("timeout\n");
+	while (expirations--)
+	{
 		aaf->timer_expirations++;
 
 		res = aaf_process_frames(aaf);
@@ -1080,17 +1250,17 @@ static int aaf_set_hw_constraint(snd_pcm_aaf_t *aaf)
 	};
 
 	res = snd_pcm_ioplug_set_param_list(io, SND_PCM_IOPLUG_HW_ACCESS,
-					    ARRAY_SIZE(accesses), accesses);
+										ARRAY_SIZE(accesses), accesses);
 	if (res < 0)
 		return res;
 
 	res = snd_pcm_ioplug_set_param_list(io, SND_PCM_IOPLUG_HW_FORMAT,
-					    ARRAY_SIZE(formats), formats);
+										ARRAY_SIZE(formats), formats);
 	if (res < 0)
 		return res;
 
 	res = snd_pcm_ioplug_set_param_list(io, SND_PCM_IOPLUG_HW_RATE,
-					    ARRAY_SIZE(rates), rates);
+										ARRAY_SIZE(rates), rates);
 	if (res < 0)
 		return res;
 
@@ -1114,21 +1284,21 @@ static void aaf_dump(snd_pcm_ioplug_t *io, snd_output_t *out)
 	snd_output_printf(out, "AVTP setup is:\n");
 	snd_output_printf(out, "  ifname: %s\n", aaf->ifname);
 	snd_output_printf(out, "  macaddr: %.2X:%.2X:%.2X:%.2X:%.2X:%.2X\n",
-			  aaf->addr[0], aaf->addr[1], aaf->addr[2],
-			  aaf->addr[3], aaf->addr[4], aaf->addr[5]);
+					  aaf->addr[0], aaf->addr[1], aaf->addr[2],
+					  aaf->addr[3], aaf->addr[4], aaf->addr[5]);
 	snd_output_printf(out, "  priority: %d\n", aaf->prio);
-	snd_output_printf(out, "  streamid: %"PRIX64"\n", aaf->streamid);
+	snd_output_printf(out, "  streamid: %" PRIX64 "\n", aaf->streamid);
 	snd_output_printf(out, "  mtt: %d\n", aaf->mtt / NSEC_PER_USEC);
 	snd_output_printf(out, "  time uncertainty: %d\n",
-			  aaf->t_uncertainty / NSEC_PER_USEC);
+					  aaf->t_uncertainty / NSEC_PER_USEC);
 	snd_output_printf(out, "  frames per AVTPDU: %lu\n",
-			  aaf->frames_per_pdu);
+					  aaf->frames_per_pdu);
 	snd_output_printf(out, "  ptime tolerance: %d\n",
-			  aaf->ptime_tolerance / NSEC_PER_USEC);
+					  aaf->ptime_tolerance / NSEC_PER_USEC);
 }
 
 static int aaf_hw_params(snd_pcm_ioplug_t *io,
-			 snd_pcm_hw_params_t *params ATTRIBUTE_UNUSED)
+						 snd_pcm_hw_params_t *params ATTRIBUTE_UNUSED)
 {
 	int res;
 	snd_pcm_aaf_t *aaf = io->private_data;
@@ -1153,7 +1323,8 @@ static int aaf_hw_params(snd_pcm_ioplug_t *io,
 	if (res < 0)
 		goto err_free_areas;
 
-	if (io->period_size % aaf->frames_per_pdu) {
+	if (io->period_size % aaf->frames_per_pdu)
+	{
 		/* The plugin requires that the period size is multiple of the
 		 * configuration frames_per_pdu. Return error if this
 		 * requirement isn't satisfied.
@@ -1164,7 +1335,7 @@ static int aaf_hw_params(snd_pcm_ioplug_t *io,
 	}
 
 	aaf->pdu_period = (uint64_t)NSEC_PER_SEC * aaf->frames_per_pdu /
-			  io->rate;
+					  io->rate;
 	return 0;
 
 err_free_msghdr:
@@ -1224,17 +1395,20 @@ static int aaf_poll_descriptors_count(snd_pcm_ioplug_t *io ATTRIBUTE_UNUSED)
 }
 
 static int aaf_poll_descriptors(snd_pcm_ioplug_t *io, struct pollfd *pfd,
-				unsigned int space)
+								unsigned int space)
 {
 	snd_pcm_aaf_t *aaf = io->private_data;
 
-	if (io->stream == SND_PCM_STREAM_PLAYBACK) {
+	if (io->stream == SND_PCM_STREAM_PLAYBACK)
+	{
 		if (space != FD_COUNT_PLAYBACK)
 			return -EINVAL;
 
 		pfd[0].fd = aaf->timer_fd;
 		pfd[0].events = POLLIN;
-	} else {
+	}
+	else
+	{
 		if (space != FD_COUNT_CAPTURE)
 			return -EINVAL;
 
@@ -1248,27 +1422,32 @@ static int aaf_poll_descriptors(snd_pcm_ioplug_t *io, struct pollfd *pfd,
 }
 
 static int aaf_poll_revents(snd_pcm_ioplug_t *io, struct pollfd *pfd,
-			    unsigned int nfds, unsigned short *revents)
+							unsigned int nfds, unsigned short *revents)
 {
 	int res;
 	snd_pcm_aaf_t *aaf = io->private_data;
 
-	if (io->stream == SND_PCM_STREAM_PLAYBACK) {
+	if (io->stream == SND_PCM_STREAM_PLAYBACK)
+	{
 		if (nfds != FD_COUNT_PLAYBACK)
 			return -EINVAL;
 
-		if (pfd[0].revents & POLLIN) {
+		if (pfd[0].revents & POLLIN)
+		{
 			res = aaf_timer_timeout(aaf);
 			if (res < 0)
 				return res;
 
 			*revents = POLLIN;
 		}
-	} else {
+	}
+	else
+	{
 		if (nfds != FD_COUNT_CAPTURE)
 			return -EINVAL;
 
-		if (pfd[0].revents & POLLIN) {
+		if (pfd[0].revents & POLLIN)
+		{
 			res = aaf_timer_timeout(aaf);
 			if (res < 0)
 				return res;
@@ -1276,7 +1455,8 @@ static int aaf_poll_revents(snd_pcm_ioplug_t *io, struct pollfd *pfd,
 			*revents = POLLIN;
 		}
 
-		if (pfd[1].revents & POLLIN) {
+		if (pfd[1].revents & POLLIN)
+		{
 			res = aaf_socket_new_data(aaf);
 			if (res < 0)
 				return res;
@@ -1309,9 +1489,12 @@ static int aaf_start(snd_pcm_ioplug_t *io)
 	int res;
 	snd_pcm_aaf_t *aaf = io->private_data;
 
-	if (io->stream == SND_PCM_STREAM_PLAYBACK) {
+	if (io->stream == SND_PCM_STREAM_PLAYBACK)
+	{
 		res = aaf_mclk_start_playback(aaf);
-	} else {
+	}
+	else
+	{
 		/* Discard any packet on socket buffer to ensure the plugin
 		 * process only packets that arrived after the device has
 		 * started.
@@ -1358,7 +1541,8 @@ SND_PCM_PLUGIN_DEFINE_FUNC(aaf)
 	int res;
 
 	aaf = calloc(1, sizeof(*aaf));
-	if (!aaf) {
+	if (!aaf)
+	{
 		SNDERR("Failed to allocate memory");
 		return -ENOMEM;
 	}
@@ -1377,13 +1561,15 @@ SND_PCM_PLUGIN_DEFINE_FUNC(aaf)
 	aaf->io.flags = SND_PCM_IOPLUG_FLAG_BOUNDARY_WA;
 	aaf->io.mmap_rw = 1;
 	res = snd_pcm_ioplug_create(&aaf->io, name, stream, mode);
-	if (res < 0) {
+	if (res < 0)
+	{
 		SNDERR("Failed to create ioplug instance");
 		goto err;
 	}
 
 	res = aaf_set_hw_constraint(aaf);
-	if (res < 0) {
+	if (res < 0)
+	{
 		SNDERR("Failed to set hw constraints");
 		snd_pcm_ioplug_delete(&aaf->io);
 		return res;
