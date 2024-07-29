@@ -18,6 +18,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 //hello
+//yyy
 #include <time.h>
 #include <alsa/asoundlib.h>
 #include <alsa/pcm_external.h>
